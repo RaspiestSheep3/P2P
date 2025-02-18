@@ -26,7 +26,7 @@ class PeerReceiver:
             self.peer_socket.connect((self.signaling_server_host, self.signaling_server_port))
 
             # Send peer info with dynamically assigned port
-            my_info = {'ip': '127.0.0.1', 'port': self.listen_port, 'name': self.name}
+            my_info = {'ip': '127.0.0.1', 'port': self.listen_port, 'name': self.name, 'join type': 'receiver'}
             print(f"Sending peer info: {my_info}")
             self.peer_socket.send(json.dumps(my_info).encode())
 
@@ -53,23 +53,33 @@ class PeerReceiver:
             print(f"Connected to peer {address}")
 
             # Receive the filename first
-            file_name = connection.recv(256).decode().strip()  # Read the 256-byte filename header
-            print(f"Receiving file: {file_name}")
-            file_name = file_name.split(".")
-            file_name_end = file_name[1]
-            file_name = file_name[0]
+            file_name = connection.recv(256).decode()
             
-            file_name = f"{file_name}-Received.{file_name_end}"
-            
-            # Open a file to save the incoming data with the correct name
-            with open(file_name, 'wb') as file:
-                while True:
-                    data = connection.recv(1024)
-                    if not data:
-                        break
-                    file.write(data)
+            try: #Try converting to a dictionary - if we can it is a ping not a file
+                file_name = json.loads(file_name)
+                if(file_name.get("type") == "heartbeat ping"):  #Ping from the server
+                    #We are responding
+                    response = json.dumps({"type": "hearbeat pong", "message": "I am still here!"}).encode()
+                    connection.send(response)
+            except: #If we cannot, we are recieving an actual file
+                file_name = file_name.strip()  # Read the 256-byte filename header
+                print(f"Receiving file: {file_name}")
+                file_name = file_name.split(".")
+                file_name_end = file_name[1]
+                file_name = file_name[0]
+                
+                file_name = f"{file_name}-Received.{file_name_end}"
+                
+                # Open a file to save the incoming data with the correct name
+                with open(file_name, 'wb') as file:
+                    while True:
+                        data = connection.recv(1024)
+                        if not data:
+                            break
+                        file.write(data)
 
-            print(f"File '{file_name}' received successfully!")
+                print(f"File '{file_name}' received successfully!")
+            
             connection.close()
 
 if __name__ == '__main__':

@@ -18,8 +18,7 @@ class PeerSender:
             self.peer_socket.connect((self.signaling_server_host, self.signaling_server_port))
 
             # We are only sending files, so no need to register a listening port
-            my_info = {'ip': '127.0.0.1', 'port': 0,
-                       'name' : self.name}  # FIXED: We don't need to listen
+            my_info = {'ip': '127.0.0.1', 'port': 0, 'name' : self.name, 'join type': 'sender'}  # FIXED: We don't need to listen
             print(f"Sending peer info: {my_info}")
             self.peer_socket.send(json.dumps(my_info).encode())
 
