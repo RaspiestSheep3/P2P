@@ -1,6 +1,7 @@
 import socket
 import json
 import os
+import threading
 
 deviceName = "DEVICE 1"
 
@@ -144,6 +145,6 @@ if __name__ == '__main__':
            
         for targetPeer in targetPeers:
             print(f"TARGET PEER {targetPeer} {targetPeer[1]}") 
-            peer_copy.SendFiles(fileNames, targetPeer[0], targetPeer[1])
+            threading.Thread(target=peer_copy.SendFiles, args=(fileNames, targetPeer[0], targetPeer[1])).start()
     else:
         print("Failed to retrieve peers. Exiting.")
