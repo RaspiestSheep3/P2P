@@ -6,7 +6,7 @@ from datetime import datetime
 waitingForFiles = True
 deviceName = datetime.now().strftime("%H:%M:%S")
 
-class PeerReceiver:
+class PeerReceiver: 
     def __init__(self, signaling_server_host='127.0.0.1', signaling_server_port=12345,name = ""):
         self.signaling_server_host = signaling_server_host
         self.signaling_server_port = signaling_server_port
@@ -16,7 +16,7 @@ class PeerReceiver:
         # Start listening for file transfer before registering with the server
         self.listener_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener_socket.bind(('127.0.0.1', 0))  # OS assigns a free port
-        self.listener_socket.listen(1)
+        self.listener_socket.listen(5) #Up to 5 qeued connections
         self.listen_port = self.listener_socket.getsockname()[1]
 
     def connect_to_server(self):
@@ -43,6 +43,53 @@ class PeerReceiver:
         except Exception as e:
             print(f"Error connecting to server: {e}")
 
+    def ReceiveFile(self, pConnection, file_name):
+        file_name = file_name.strip()  # Read the 256-byte filename header
+        print(f"Receiving file: {file_name}")
+        file_name = file_name.split(".")
+        file_name_end = file_name[1]
+        file_name = file_name[0]
+        
+        file_name = f"{file_name}-Received.{file_name_end}"
+        
+        # Open a file to save the incoming data with the correct name
+        with open(file_name, 'wb') as file:
+            while True:
+                data = pConnection.recv(1024)
+                if not data:
+                    break
+                file.write(data)
+
+        print(f"File '{file_name}' received successfully!")
+        pConnection.close()
+
+    def HandleConnection(self, pConnection):
+        # Receive the filename first
+        file_name = pConnection.recv(256).decode()
+        
+        try: #Try converting to a dictionary - if we can it is a ping not a file
+            file_name = json.loads(file_name)
+            if(file_name.get("type") == "heartbeat ping"):  #Ping from the server
+                #We are responding
+                response = json.dumps({"type": "hearbeat pong", "message": "I am still here!"}).encode()
+                pConnection.send(response)
+                pConnection.close()
+    
+            elif(file_name.get("type") == "send request ping"):
+                print(file_name.get("message"))
+                shouldAccept = input("Do you accept this file transfer request? (Y/N)? : ")
+                if(shouldAccept.strip().upper() == "Y"):
+                    response = json.dumps({"type": "send request pong - accept", "message": "I accept your file transfer"}).encode()
+                    pConnection.send(response)
+                else:
+                    response = json.dumps({"type": "send request pong - deny", "message": "I do not accept your file transfer"}).encode()
+                    pConnection.send(response)
+            
+        except json.JSONDecodeError: #If we cannot, we are recieving an actual file
+            threading.Thread(target=self.ReceiveFile, args=(pConnection,file_name)).start()
+        
+        finally:
+            return
 
     def listen_for_file(self):
         print(f"Listening for incoming file transfer on port {self.listen_port}...")
@@ -51,46 +98,7 @@ class PeerReceiver:
             connection, address = self.listener_socket.accept()
             print(f"Connected to peer {address}")
 
-            # Receive the filename first
-            file_name = connection.recv(256).decode()
-            
-            try: #Try converting to a dictionary - if we can it is a ping not a file
-                file_name = json.loads(file_name)
-                if(file_name.get("type") == "heartbeat ping"):  #Ping from the server
-                    #We are responding
-                    response = json.dumps({"type": "hearbeat pong", "message": "I am still here!"}).encode()
-                    connection.send(response)
-        
-                elif(file_name.get("type") == "send request ping"):
-                    print(file_name.get("message"))
-                    shouldAccept = input("Do you accept this file transfer request? (Y/N)? : ")
-                    if(shouldAccept.strip().upper() == "Y"):
-                        response = json.dumps({"type": "send request pong - accept", "message": "I accept your file transfer"}).encode()
-                        connection.send(response)
-                    else:
-                        response = json.dumps({"type": "send request pong - deny", "message": "I do not accept your file transfer"}).encode()
-                        connection.send(response)
-                
-            except: #If we cannot, we are recieving an actual file
-                file_name = file_name.strip()  # Read the 256-byte filename header
-                print(f"Receiving file: {file_name}")
-                file_name = file_name.split(".")
-                file_name_end = file_name[1]
-                file_name = file_name[0]
-                
-                file_name = f"{file_name}-Received.{file_name_end}"
-                
-                # Open a file to save the incoming data with the correct name
-                with open(file_name, 'wb') as file:
-                    while True:
-                        data = connection.recv(1024)
-                        if not data:
-                            break
-                        file.write(data)
-
-                print(f"File '{file_name}' received successfully!")
-            
-            connection.close()
+            threading.Thread(target=self.HandleConnection,args=(connection,)).start()
 
 if __name__ == '__main__':
     peer = PeerReceiver(name=deviceName)
