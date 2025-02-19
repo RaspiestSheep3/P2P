@@ -2,6 +2,8 @@ import socket
 import json
 import os
 import threading
+import tkinter as tk
+from tkinter import filedialog
 
 deviceName = "DEVICE 1"
 
@@ -123,10 +125,11 @@ if __name__ == '__main__':
         #print(f"PEERS ITEMS {list(peers.items())}")
 
         # Send a file to the first peer
-        while(file_path != "Q"):
-            file_path = input("What is the name of the file you wish to send? (Input Q to quit adding new files): ")
-            if(file_path != "Q"):
-                fileNames.append(file_path)
+        #Uploading files
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+        files = filedialog.askopenfilenames(title="Select Files to Send")
+        fileNames = list(files)
         
         targetPort = 0
         targetPeers = []

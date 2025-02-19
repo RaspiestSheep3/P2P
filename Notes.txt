@@ -7,3 +7,4 @@ Different file types - Me
 Request before sending - Me
 Multiple peers at once - Me
 Downloading multiple files at once with threading - Me + ChatGPT
+File upload - Me
