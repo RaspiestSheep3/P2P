@@ -4,7 +4,6 @@ import threading
 from datetime import datetime
 
 waitingForFiles = True
-#deviceName = "DEVICE 1"
 deviceName = datetime.now().strftime("%H:%M:%S")
 
 class PeerReceiver:
@@ -61,6 +60,17 @@ class PeerReceiver:
                     #We are responding
                     response = json.dumps({"type": "hearbeat pong", "message": "I am still here!"}).encode()
                     connection.send(response)
+        
+                elif(file_name.get("type") == "send request ping"):
+                    print(file_name.get("message"))
+                    shouldAccept = input("Do you accept this file transfer request? (Y/N)? : ")
+                    if(shouldAccept.strip().upper() == "Y"):
+                        response = json.dumps({"type": "send request pong - accept", "message": "I accept your file transfer"}).encode()
+                        connection.send(response)
+                    else:
+                        response = json.dumps({"type": "send request pong - deny", "message": "I do not accept your file transfer"}).encode()
+                        connection.send(response)
+                
             except: #If we cannot, we are recieving an actual file
                 file_name = file_name.strip()  # Read the 256-byte filename header
                 print(f"Receiving file: {file_name}")

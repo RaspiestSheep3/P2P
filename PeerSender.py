@@ -34,6 +34,28 @@ class PeerSender:
             print(f"Error connecting to server: {e}")
             return None  # FIXED: Return None if connection fails
 
+    def SendFiles(self, fileNames, peerIP, peerPort):
+        peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            peer_socket.connect((peer_ip, peer_port))
+            
+            #Send request to send files to peer
+            peer_socket.send(json.dumps({"type": "send request ping", "message": f"User {self.name} wishes to send files"}).encode())
+            print("We have sent a file transfer request to target listener")
+            response = json.loads(peer_socket.recv(1024).decode())
+
+            if(response["type"] == "send request pong - accept"):
+                #We can send a file
+                print("WE CAN SEND FILES")
+                for fileName in fileNames:
+                    self.send_file(peerIP, peerPort, fileName)
+            else:
+                print("WE CANNOT SEND FILES")
+        except:
+            print("File transfer request failed. It is likely target listener has disconnected")
+        
+        peer_socket.close()
+    
     def send_file(self, peer_ip, peer_port, file_path):
         try:
             file_name = os.path.basename(file_path)  # Extract the filename
@@ -42,7 +64,7 @@ class PeerSender:
 
             peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             peer_socket.connect((peer_ip, peer_port))
-
+            
             # Send the filename first
             peer_socket.send(file_name.encode().ljust(256))  # Send a 256-byte filename header
 
@@ -104,7 +126,6 @@ if __name__ == '__main__':
             file_path = input("What is the name of the file you wish to send? (Input Q to quit adding new files): ")
             if(file_path != "Q"):
                 fileNames.append(file_path)
-        for fileName in fileNames:
-            peer_copy.send_file(peer_ip, peer_port, fileName)
+        peer_copy.SendFiles(fileNames, peer_ip, peer_port)
     else:
         print("Failed to retrieve peers. Exiting.")
