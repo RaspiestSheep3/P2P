@@ -4,3 +4,4 @@ Heartbeats - Me
 Batch Sending - Me
 Names - Me
 Different file types - Me
+Request before sending - Me
