@@ -1,0 +1,6 @@
+Basic P2P system - ChatGPT
+Ability to choose peer - Me
+Heartbeats - Me
+Batch Sending - Me
+Names - Me
+Different file types - Me

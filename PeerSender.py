@@ -2,7 +2,6 @@ import socket
 import json
 import os
 
-
 deviceName = "DEVICE 1"
 
 class PeerSender:
@@ -86,6 +85,8 @@ def ChooseTargetPort(peersItemsList):
 
 if __name__ == '__main__':
     peer_copy = PeerSender(name=deviceName)
+    fileNames = []
+    file_path = ""
 
     # Connect to signaling server and get peer list
     peers = peer_copy.connect_to_server()
@@ -99,7 +100,11 @@ if __name__ == '__main__':
         peer_port = peer_info['port']
 
         # Send a file to the first peer
-        file_path = input("What is the name of the file you wish to send? : ")
-        peer_copy.send_file(peer_ip, peer_port, file_path)
+        while(file_path != "Q"):
+            file_path = input("What is the name of the file you wish to send? (Input Q to quit adding new files): ")
+            if(file_path != "Q"):
+                fileNames.append(file_path)
+        for fileName in fileNames:
+            peer_copy.send_file(peer_ip, peer_port, fileName)
     else:
         print("Failed to retrieve peers. Exiting.")
