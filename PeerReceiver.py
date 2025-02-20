@@ -43,6 +43,14 @@ class PeerReceiver:
         except Exception as e:
             print(f"Error connecting to server: {e}")
 
+    def RequestChunk(self, targetChunk, pConnection):
+        pConnection.send(str(targetChunk).zfill(8).encode()) 
+        missingChunk = b""
+        while len(missingChunk) < 1024:
+            missingChunk += pConnection.recv(1024 - len(missingChunk)) 
+        return missingChunk
+        
+    
     def ReceiveFile(self, pConnection, file_name):
         file_name = file_name.strip()  # Read the 256-byte filename header
         print(f"Receiving file: {file_name}")
@@ -52,15 +60,41 @@ class PeerReceiver:
         
         file_name = f"{file_name}-Received.{file_name_end}"
         
+        receivedChunks = []
+        totalExpectedChunks = int(pConnection.recv(8).decode())
+    
         # Open a file to save the incoming data with the correct name
         with open(file_name, 'wb') as file:
-            while True:
-                data = pConnection.recv(1024)
-                if not data:
-                    break
-                file.write(data)
+            fullData = [""] * totalExpectedChunks 
+            
+            while len(receivedChunks) < totalExpectedChunks:
+                received = pConnection.recv(8).decode()  # Read chunk number
+                chunkCount = int(received)
 
-        print(f"File '{file_name}' received successfully!")
+                chunk = b""
+                while len(chunk) < 1024:
+                    chunk += pConnection.recv(1024 - len(chunk))  # ❌ May wait indefinitely
+
+                receivedChunks.append(chunkCount)
+                fullData[chunkCount - 1] = chunk  # ✅ Correctly store received chunk
+            
+            print(f"CHUNK COUNT {len(receivedChunks)} EXPECTED {totalExpectedChunks}")
+            if(len(receivedChunks) < totalExpectedChunks):
+                #We have not received enough chunks
+                lastChunk = 0
+                for receivedChunk in receivedChunks:
+                    if(receivedChunk -1 != lastChunk):
+                        #Missing chunk
+                        fullData[receivedChunk - 1] = self.RequestChunk(receivedChunk,pConnection)
+                    lastChunk += 1
+            else:
+                pConnection.send("All files received".encode())
+                print(f"File '{file_name}' received successfully!")
+            
+            #Writing data
+            for dataPiece in fullData:
+                file.write(dataPiece)
+            
         pConnection.close()
 
     def HandleConnection(self, pConnection):

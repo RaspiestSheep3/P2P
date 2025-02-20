@@ -1,4 +1,4 @@
-import socket
+import socket 
 import json
 import os
 import threading
@@ -61,25 +61,40 @@ class PeerSender:
     
     def send_file(self, pPeer_ip, pPeer_port, pFile_path):
         try:
-            file_name = os.path.basename(pFile_path)  # Extract the filename
+            file_name = os.path.basename(pFile_path)
             file_size = os.path.getsize(pFile_path)
-            print(f"Sending file '{file_name}' of size {file_size} bytes to {pPeer_ip}:{pPeer_port}")
+            totalChunkCount = (file_size // 1024) + (1 if file_size % 1024 != 0 else 0)
+
+            print(f"Sending file '{file_name}' ({file_size} bytes) to {pPeer_ip}:{pPeer_port}")
 
             peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             peer_socket.connect((pPeer_ip, pPeer_port))
-            
-            # Send the filename first
-            peer_socket.send(file_name.encode().ljust(256))  # Send a 256-byte filename header
 
-            # Send the actual file data
+            # Send the filename
+            peer_socket.send(file_name.encode().ljust(256))
+
+            # Send total chunk count
+            peer_socket.send(str(totalChunkCount).zfill(8).encode())
+
+            chunkedData = []
             with open(pFile_path, 'rb') as file:
-                while chunk := file.read(1024):
-                    peer_socket.send(chunk)
+                for chunkIndex in range(totalChunkCount):
+                    chunk = file.read(1024)
+
+                    # ✅ Ensure last chunk is sent correctly (Fix 3)
+                    chunkSize = min(1024, file_size - (chunkIndex * 1024))  
+                    chunk = chunk[:chunkSize]  # ✅ Trim excess bytes for last chunk
+
+                    peer_socket.send(str(chunkIndex + 1).zfill(8).encode())  # Send chunk number
+                    peer_socket.send(chunk)  # Send only required bytes
+                    chunkedData.append(chunk)
+                    print(f"Sent chunk {chunkIndex + 1}/{totalChunkCount} ({chunkSize} bytes)")
 
             print("File sent successfully!")
             peer_socket.close()
         except Exception as e:
             print(f"Error sending file: {e}")
+
 
 def ChooseTargetPort(peersItemsList):
     print("CONNECTED PEERS: ")
