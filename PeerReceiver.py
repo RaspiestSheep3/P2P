@@ -2,6 +2,7 @@ import socket
 import json
 import threading
 from datetime import datetime
+import stun 
 
 waitingForFiles = True
 deviceName = datetime.now().strftime("%H:%M:%S")
@@ -19,13 +20,32 @@ class PeerReceiver:
         self.listener_socket.listen(5) #Up to 5 qeued connections
         self.listen_port = self.listener_socket.getsockname()[1]
 
+        #STUN - for public networks
+        self.public_ip, self.public_port,natType = self.get_public_ip()
+        print(f"Discovered Public IP: {self.public_ip}, Public Port: {self.public_port} NAT Type: {natType}")
+        if(natType == ""):
+            print("Some error occured. Do not run")
+            exit()
+        elif(natType == "Symmetric NAT"):
+            print("You are using Symmetric NAT so we cannot use STUN. Unfortunately you cannot run this code")
+            exit()
+        
+    def get_public_ip(self):
+        try:
+            nat_type, external_ip, external_port = stun.get_ip_info()
+            print(f"NAT Type: {nat_type}, Public IP: {external_ip}, Public Port: {external_port}")
+            return external_ip, external_port,nat_type
+        except Exception as e:
+            print(f"STUN failed: {e}")
+            return "0.0.0.0", self.listen_port,""  # Default to local if STUN fails
+      
     def connect_to_server(self):
         try:
             print(f"Connecting to server at {self.signaling_server_host}:{self.signaling_server_port}")
             self.peer_socket.connect((self.signaling_server_host, self.signaling_server_port))
 
             # Send peer info with dynamically assigned port
-            my_info = {'ip': '127.0.0.1', 'port': self.listen_port, 'name': self.name, 'join type': 'receiver'}
+            my_info = {'ip': self.public_ip, 'port': self.public_port, 'name': self.name, 'join type': 'receiver'}
             print(f"Sending peer info: {my_info}")
             self.peer_socket.send(json.dumps(my_info).encode())
 

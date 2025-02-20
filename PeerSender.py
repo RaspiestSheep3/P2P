@@ -4,6 +4,7 @@ import os
 import threading
 import tkinter as tk
 from tkinter import filedialog
+import stun
 
 deviceName = "DEVICE 1"
 
@@ -14,13 +15,26 @@ class PeerSender:
         self.name = name
         self.peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # FIXED: Initialize socket
 
+    def get_public_ip(self):
+        try:
+            nat_type, external_ip, external_port = stun.get_ip_info()
+            print(f"NAT Type: {nat_type}, Public IP: {external_ip}, Public Port: {external_port}")
+            return external_ip, external_port,nat_type
+        except Exception as e:
+            print(f"STUN failed: {e}")
+            return "0.0.0.0", 0,""  # Default to local if STUN fails
+
     def connect_to_server(self):
         try:
             print(f"Connecting to server at {self.signaling_server_host}:{self.signaling_server_port}")
             self.peer_socket.connect((self.signaling_server_host, self.signaling_server_port))
 
+            #Setting up STUN
+            
+            self.public_ip, self.public_port,self.natType = self.get_public_ip()
+        
             # We are only sending files, so no need to register a listening port
-            my_info = {'ip': '127.0.0.1', 'port': 0, 'name' : self.name, 'join type': 'sender'}  # FIXED: We don't need to listen
+            my_info = {'ip': self.public_ip, 'port': self.public_port, 'name' : self.name, 'join type': 'sender'}  # FIXED: We don't need to listen
             print(f"Sending peer info: {my_info}")
             self.peer_socket.send(json.dumps(my_info).encode())
 
