@@ -4,6 +4,9 @@ import os
 import threading
 import tkinter as tk
 from tkinter import filedialog
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import stun
 
 deviceName = "DEVICE 1"
@@ -90,19 +93,45 @@ class PeerSender:
             # Send total chunk count
             peer_socket.send(str(totalChunkCount).zfill(8).encode())
 
+            #Encryption
+            aes_key = os.urandom(32)
+            public_key_data = peer_socket.recv(2048) #Full rsa data
+            rsaKey = serialization.load_pem_public_key(public_key_data)
+            encryptedAESKey = rsaKey.encrypt(
+                aes_key,
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
+            )
+
             chunkedData = []
+            peer_socket.send(len(encryptedAESKey).to_bytes(4, byteorder='big'))
+            peer_socket.send(encryptedAESKey)
             with open(pFile_path, 'rb') as file:
                 for chunkIndex in range(totalChunkCount):
                     chunk = file.read(1024)
-
+                    
+                    #Encrypt chunk
+                    iv = os.urandom(16)
+                    cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv))
+                    encryptor = cipher.encryptor()
+                    
+                    padder = padding.PKCS7(128).padder()
+                    chunk = padder.update(chunk) + padder.finalize()
+                    
+                    encrypted_data = encryptor.update(chunk) + encryptor.finalize()
+                    encrypted_chunk = iv + encrypted_data
+                    
                     # ✅ Ensure last chunk is sent correctly (Fix 3)
-                    chunkSize = min(1024, file_size - (chunkIndex * 1024))  
-                    chunk = chunk[:chunkSize]  # ✅ Trim excess bytes for last chunk
+                    #chunkSize = min(1040, file_size - (chunkIndex * 1040))  
+                    #chunk = chunk[:chunkSize]  # ✅ Trim excess bytes for last chunk
 
                     peer_socket.send(str(chunkIndex + 1).zfill(8).encode())  # Send chunk number
-                    peer_socket.send(chunk)  # Send only required bytes
+                    peer_socket.send(encrypted_chunk)  # Send only required bytes
                     chunkedData.append(chunk)
-                    print(f"Sent chunk {chunkIndex + 1}/{totalChunkCount} ({chunkSize} bytes)")
+                    print(f"Sent chunk {chunkIndex + 1}/{totalChunkCount} ({1040} bytes)")
 
             print("File sent successfully!")
             peer_socket.close()
