@@ -6,7 +6,7 @@ import time
 
 # Signaling server class
 class SignalingServer:
-    def __init__(self, host='127.0.0.1', port=12345):
+    def __init__(self, host='0.0.0.0', port=12345):
         self.host = host
         self.port = port
         self.peers = {}
@@ -63,11 +63,15 @@ class SignalingServer:
                 peerPort = self.peers[peer]["port"]
                 
                 #Only send to receiver types
-                if(self.peers[peer]["join type"] != "receiver"):
+                print(f"TYPE:  {self.peers[peer]}")
+                if(self.peers[peer]["joinType"] != "receiver"):
                     continue
                 
                 try:
+                    print(f"IP {peerIP} PORT {peerPort}")
                     connectionSocket.connect((peerIP,peerPort)) 
+                    print("CONNECTION SUCCEEDED")
+                    connectionSocket.settimeout(10)
                     
                     #Sending each peer a ping to see if they are still contactable
                     pingMessage = json.dumps({"type": "heartbeat ping", "message": "Are you still there?"}).encode()
@@ -79,17 +83,18 @@ class SignalingServer:
                     if(response):
                         #Likely peer is still connected
                         print(f"{self.peers[peer]['name']} is still connected")
-                        connectionSocket.close()
                     else:
                         #Possible they have disconnected
                         print("No response received. Peer may be disconnected.")
-                        connectionSocket.close()
                         peersToRemove.append(peer)
-                except:
-                    connectionSocket.close()
+                except Exception as e:
+                    print(f"ERROR : {e}")
                     print("Connection failed. It is likely peer has disconnected")
                     peersToRemove.append(peer)
-            
+
+                finally:
+                    connectionSocket.close()
+                
             for peerToRemove in peersToRemove:
                 self.RemoveFromPeers(peerToRemove)
 

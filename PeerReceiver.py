@@ -2,7 +2,7 @@ import socket
 import json
 import threading
 from datetime import datetime
-import stun 
+import stun
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -10,101 +10,102 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 waitingForFiles = True
 deviceName = datetime.now().strftime("%H:%M:%S")
 
-class PeerReceiver: 
-    def __init__(self, signaling_server_host='127.0.0.1', signaling_server_port=12345,name = ""):
-        self.signaling_server_host = signaling_server_host
-        self.signaling_server_port = signaling_server_port
+class PeerReceiver:
+    def __init__(self, signalingServerHost='xyz', signalingServerPort=12345, name=""):
+        self.signalingServerHost = signalingServerHost
+        self.signalingServerPort = signalingServerPort
         self.name = name
-        self.peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.peerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Start listening for file transfer before registering with the server
-        self.listener_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.listener_socket.bind(('127.0.0.1', 0))  # OS assigns a free port
-        self.listener_socket.listen(5) #Up to 5 qeued connections
-        self.listen_port = self.listener_socket.getsockname()[1]
+        self.listenerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listenerSocket.bind(('xyz', 0))  # OS assigns a free port
+        self.listenerSocket.listen(5)  # Up to 5 queued connections
+        self.listenPort = self.listenerSocket.getsockname()[1]
 
-        #STUN - for public networks
-        self.public_ip, self.public_port,self.natType = self.get_public_ip()
-        print(f"Discovered Public IP: {self.public_ip}, Public Port: {self.public_port} NAT Type: {self.natType}")
-        if(self.natType == ""):
-            print("Some error occured. Do not run")
+        # STUN - for public networks
+        print("LISTENING FOR STUN")
+        self.publicIp, self.publicPort, self.natType = self.getPublicIp()
+        print(f"Discovered Public IP: {self.publicIp}, Public Port: {self.publicPort} NAT Type: {self.natType}")
+        if self.natType == "":
+            print("Some error occurred. Do not run")
             exit()
-        elif(self.natType == "Symmetric NAT"):
-            print("You are using Symmetric NAT so we cannot use STUN. Unfortunately you cannot run this code")
+        elif self.natType == "Symmetric NAT":
+            print("You are using Symmetric NAT so we cannot use STUN. Unfortunately, you cannot run this code")
             exit()
-    
-    def generate_rsa_keys(self):
+
+    def generateRsaKeys(self):
         # Generate a 2048-bit RSA key pair
-        private_key = rsa.generate_private_key(
+        privateKey = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048
         )
-        
+
         # Serialize private key
-        private_pem = private_key.private_bytes(
+        privatePem = privateKey.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption()
         )
 
         # Serialize public key
-        public_key = private_key.public_key()
-        public_pem = public_key.public_bytes(
+        publicKey = privateKey.public_key()
+        publicPem = publicKey.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
 
         # Save keys to files
-        with open("private_key.pem", "wb") as private_file:
-            private_file.write(private_pem)
-        
-        with open("public_key.pem", "wb") as public_file:
-            public_file.write(public_pem)
+        with open("privateKey.pem", "wb") as privateFile:
+            privateFile.write(privatePem)
 
-        return private_pem, public_pem
-    
-    def get_public_ip(self):
+        with open("publicKey.pem", "wb") as publicFile:
+            publicFile.write(publicPem)
+
+        return privatePem, publicPem
+
+    def getPublicIp(self):
         try:
-            nat_type, external_ip, external_port = stun.get_ip_info()
-            print(f"NAT Type: {nat_type}, Public IP: {external_ip}, Public Port: {external_port}")
-            return external_ip, external_port,nat_type
+            natType, externalIp, externalPort = stun.get_ip_info(stun_host = "stun.l.google.com",stun_port=19302)
+            print(f"NAT Type: {natType}, Public IP: {externalIp}, Public Port: {externalPort}")
+            return externalIp, externalPort, natType
         except Exception as e:
             print(f"STUN failed: {e}")
-            return "0.0.0.0", self.listen_port,""  # Default to local if STUN fails
-      
-    def connect_to_server(self):
+            return "0.0.0.0", self.listenPort, ""  # Default to local if STUN fails
+
+    def connectToServer(self):
         try:
-            print(f"Connecting to server at {self.signaling_server_host}:{self.signaling_server_port}")
-            self.peer_socket.connect((self.signaling_server_host, self.signaling_server_port))
+            print(f"Connecting to server at {self.signalingServerHost}:{self.signalingServerPort}")
+            self.peerSocket.connect((self.signalingServerHost, self.signalingServerPort))
 
             # Send peer info with dynamically assigned port
-            my_info = {'ip': self.public_ip, 'port': self.public_port, 'name': self.name, 'join type': 'receiver'}
-            print(f"Sending peer info: {my_info}")
-            self.peer_socket.send(json.dumps(my_info).encode())
+            myInfo = {'ip': self.publicIp, 'port': self.publicPort, 'name': self.name, 'joinType': 'receiver'}
+            print(f"Sending peer info: {myInfo}")
+            self.peerSocket.send(json.dumps(myInfo).encode())
 
             # Receive the list of known peers
-            peers = self.peer_socket.recv(1024).decode()
+            peers = self.peerSocket.recv(1024).decode()
             print(f"Raw received peer list (string): {peers}")  # Debugging step
 
             peers = json.loads(peers)  # Convert the JSON string into a Python dictionary
             print(f"Processed peer list: {peers}")
             for peer in peers:
-                print(f"Connected peers name : {(peers[peer])['name']}")
+                print(f"Connected peer's name: {(peers[peer])['name']}")
 
-            self.peer_socket.close()
+            self.peerSocket.close()
             return peers
         except Exception as e:
             print(f"Error connecting to server: {e}")
-            
-    def RequestChunk(self, targetChunk, pConnection):
-        pConnection.send(str(targetChunk).zfill(8).encode()) 
+
+    def requestChunk(self, targetChunk, peerConnection):
+        peerConnection.send(str(targetChunk).zfill(8).encode())
         missingChunk = b""
         while len(missingChunk) < 1024:
-            missingChunk += pConnection.recv(1024 - len(missingChunk)) 
+            missingChunk += peerConnection.recv(1024 - len(missingChunk))
         return missingChunk
-        
-    def DecryptAESKey(self, encrypted,privateRSA):
-        return privateRSA.decrypt(
+
+    def decryptAesKey(self, encrypted, privateRsa):
+        return privateRsa.decrypt(
             encrypted,
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
@@ -112,129 +113,126 @@ class PeerReceiver:
                 label=None
             )
         )
-    
-    def ReceiveFile(self, pConnection, file_name):
-        file_name = file_name.strip()  # Read the 256-byte filename header
-        print(f"Receiving file: {file_name}")
-        file_name = file_name.split(".")
-        file_name_end = file_name[1]
-        file_name = file_name[0]
-        
-        file_name = f"{file_name}-Received.{file_name_end}"
-        
-        receivedChunks = []
-        totalExpectedChunks = int(pConnection.recv(8).decode())
-    
-        #Send RSA public key for encryption
-        with open("public_key.pem", "rb") as file:
-            pConnection.send(file.read())
-        
-        # Open a file to save the incoming data with the correct name
-        with open(file_name, 'wb') as file:
-            fullData = [""] * totalExpectedChunks 
 
-            #Encryption business
-            key_length = int.from_bytes(pConnection.recv(4), byteorder='big')
-            aesKeyEncrypted = pConnection.recv(key_length)
-            privateRSAKey = ""
-            with open("private_key.pem", "rb") as f:
-                privateRSAKey = serialization.load_pem_private_key(f.read(), password=None)
-            aesKey = self.DecryptAESKey(aesKeyEncrypted,privateRSAKey)
-            
+    def receiveFile(self, peerConnection, fileName):
+        fileName = fileName.strip()  # Read the 256-byte filename header
+        print(f"Receiving file: {fileName}")
+        fileNameParts = fileName.split(".")
+        fileNameEnd = fileNameParts[1]
+        fileName = fileNameParts[0]
+        fileName = f"{fileName}-Received.{fileNameEnd}"
+
+        receivedChunks = []
+        totalExpectedChunks = int(peerConnection.recv(8).decode())
+
+        # Send RSA public key for encryption
+        with open("publicKey.pem", "rb") as file:
+            peerConnection.send(file.read())
+
+        # Open a file to save the incoming data with the correct name
+        with open(fileName, 'wb') as file:
+            fullData = [""] * totalExpectedChunks
+
+            # Encryption business
+            keyLength = int.from_bytes(peerConnection.recv(4), byteorder='big')
+            aesKeyEncrypted = peerConnection.recv(keyLength)
+            with open("privateKey.pem", "rb") as f:
+                privateRsaKey = serialization.load_pem_private_key(f.read(), password=None)
+            aesKey = self.decryptAesKey(aesKeyEncrypted, privateRsaKey)
+
             while len(receivedChunks) < totalExpectedChunks:
-                received = pConnection.recv(8).decode()  # Read chunk number
+                received = peerConnection.recv(8).decode()  # Read chunk number
                 chunkCount = int(received)
 
-                
                 chunk = b""
                 while len(chunk) < 1040:
-                    chunk += pConnection.recv(1040 - len(chunk)) 
+                    chunk += peerConnection.recv(1040 - len(chunk))
 
                 receivedChunks.append(chunkCount)
                 fullData[chunkCount - 1] = chunk  # ✅ Correctly store received chunk
-            
+
             print(f"CHUNK COUNT {len(receivedChunks)} EXPECTED {totalExpectedChunks}")
-            if(len(receivedChunks) < totalExpectedChunks):
-                #We have not received enough chunks
+            if len(receivedChunks) < totalExpectedChunks:
+                # We have not received enough chunks
                 lastChunk = 0
                 for receivedChunk in receivedChunks:
-                    if(receivedChunk -1 != lastChunk):
-                        #Missing chunk
-                        fullData[receivedChunk - 1] = self.RequestChunk(receivedChunk,pConnection)
+                    if receivedChunk - 1 != lastChunk:
+                        # Missing chunk
+                        fullData[receivedChunk - 1] = self.requestChunk(receivedChunk, peerConnection)
                     lastChunk += 1
             else:
-                pConnection.send("All files received".encode())
-                print(f"File '{file_name}' received successfully!")
-            
-            #Writing data
+                peerConnection.send("All files received".encode())
+                print(f"File '{fileName}' received successfully!")
+
+            # Writing data
             for dataPiece in fullData:
-                
-                #Decrpyting full data
+                # Decrypting full data
                 iv = dataPiece[:16]  # Extract IV
-                encrypted_content = dataPiece[16:]  # Actual encrypted message
+                encryptedContent = dataPiece[16:]  # Actual encrypted message
 
                 cipher = Cipher(algorithms.AES(aesKey), modes.CBC(iv))
                 decryptor = cipher.decryptor()
-                decrypted_data = decryptor.update(encrypted_content) + decryptor.finalize()
+                decryptedData = decryptor.update(encryptedContent) + decryptor.finalize()
                 unpadder = padding.PKCS7(128).unpadder()
-                decrypted_data = unpadder.update(decrypted_data) + unpadder.finalize()
-                
-                dataPiece =  decrypted_data.strip()  # Remove padding
-                
-                file.write(dataPiece)
-            
-        pConnection.close()
+                decryptedData = unpadder.update(decryptedData) + unpadder.finalize()
 
-    def HandleConnection(self, pConnection):
-        
-        # Receive the filename 
-        file_name = pConnection.recv(256).decode()
-        
-        try: #Try converting to a dictionary - if we can it is a ping not a file
-            file_name = json.loads(file_name)
-            if(file_name.get("type") == "heartbeat ping"):  #Ping from the server
-                #We are responding
-                response = json.dumps({"type": "hearbeat pong", "message": "I am still here!"}).encode()
-                pConnection.send(response)
-                pConnection.close()
-    
-            elif(file_name.get("type") == "send request ping"):
-                print(file_name.get("message"))
+                dataPiece = decryptedData.strip()  # Remove padding
+                file.write(dataPiece)
+
+        peerConnection.close()
+
+    def handleConnection(self, peerConnection):
+        # Receive the filename
+        fileName = peerConnection.recv(256).decode()
+
+        try:
+            # Try converting to a dictionary - if we can it is a ping not a file
+            fileName = json.loads(fileName)
+            if fileName.get("type") == "heartbeatPing":  # Ping from the server
+                # We are responding
+                response = json.dumps({"type": "heartbeatPong", "message": "I am still here!"}).encode()
+                print("SENDING HEARTBEAT PONG")
+                peerConnection.send(response)
+                peerConnection.close()
+
+            elif fileName.get("type") == "sendRequestPing":
+                print(fileName.get("message"))
                 shouldAccept = input("Do you accept this file transfer request? (Y/N)? : ")
-                if(shouldAccept.strip().upper() == "Y"):
-                    response = json.dumps({"type": "send request pong - accept", "message": "I accept your file transfer"}).encode()
-                    pConnection.send(response)
+                if shouldAccept.strip().upper() == "Y":
+                    response = json.dumps({"type": "sendRequestPongAccept", "message": "I accept your file transfer"}).encode()
+                    peerConnection.send(response)
                 else:
-                    response = json.dumps({"type": "send request pong - deny", "message": "I do not accept your file transfer"}).encode()
-                    pConnection.send(response)
-            
-        except json.JSONDecodeError: #If we cannot, we are recieving an actual file
-            threading.Thread(target=self.ReceiveFile, args=(pConnection,file_name)).start()
-        
+                    response = json.dumps({"type": "sendRequestPongDeny", "message": "I do not accept your file transfer"}).encode()
+                    peerConnection.send(response)
+
+        except json.JSONDecodeError:  # If we cannot, we are receiving an actual file
+            threading.Thread(target=self.receiveFile, args=(peerConnection, fileName)).start()
+
         finally:
             return
 
-    def listen_for_file(self):
-        print(f"Listening for incoming file transfer on port {self.listen_port}...")
+    def listenForFile(self):
+        print(f"Listening for incoming file transfer on port {self.listenPort}...")
 
         while True:
-            connection, address = self.listener_socket.accept()
+            connection, address = self.listenerSocket.accept()
             print(f"Connected to peer {address}")
 
-            threading.Thread(target=self.HandleConnection,args=(connection,)).start()
+            threading.Thread(target=self.handleConnection, args=(connection,)).start()
+
 
 if __name__ == '__main__':
     peer = PeerReceiver(name=deviceName)
 
     # Start listening in a separate thread so it doesn't block execution
-    listen_thread = threading.Thread(target=peer.listen_for_file, daemon=True)
-    listen_thread.start()
+    listenThread = threading.Thread(target=peer.listenForFile, daemon=True)
+    listenThread.start()
 
-    #Generate Keys for encryption
-    private_key, public_key = peer.generate_rsa_keys()
-    
+    # Generate Keys for encryption
+    privateKey, publicKey = peer.generateRsaKeys()
+
     # Connect to signaling server and get peer list
-    peers = peer.connect_to_server()
+    peers = peer.connectToServer()
 
     print("Peer is ready and waiting to receive a file...")
 
